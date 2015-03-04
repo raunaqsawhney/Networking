@@ -1,0 +1,41 @@
+ECE 358 Project 2 Notes:
+
+Assumption: Node A sends data and Node B sends ACKs. Pseudo-Bidirectional. Node A ALWAYS has packets to send.
+
+EVENT Struct: 
+	- type: TIME OUT or ACK
+	- time: telling when it occured
+	- error-flag: error or not
+	- sequence number: associated RN
+
+
+ABP Simulator: 
+	- two counters: SN (init to 0) and NEXT_EXPECTED_ACK (init to 1)
+	- in the beginning, sender chooses a value of timeout delta, which is constant throughout the simulation
+	- current time t_c is initialized to 0
+	- sender generates a packet of length L = H + l, where H is the fixed lenght of the frame header and l is the packet length
+	- Sender stores this packet in its buffer only
+	- assume sender knows channel capacity C
+	- L/C is time required for the frame to be completely sent into the channel, i.e. the transmission delay
+	- sender sends the packet in a frame with sequence number SN, which is completely transferred to the channel by time t_c + L/C, and at this point it registers a TIME-OUT event in the ES (i.e. a timeout at time t_c + L/C + delta)
+	- sender calls a function that implements "together":
+		1) The forward channel (from sender to receiver)
+		2) The receiver 
+		3) The reverse channel (from receiver to sender)
+
+		- This function is called SEND()
+		- It returns as a value an event that has t be registered in the ES.
+
+		- occasisioanlly, a frame in the forward channel or ACK in the reverse channel gets lost, in this case the function SEND() returns a NIL event which is not registered with the ES.
+		- ELse, the return value of SEND() corresponds to an ACK event which has type: with or without error, and has a sequence number RN. 
+
+	- sender reads the ES to get the next event. This also updated the value of current time t_c, and removes the event from ES.
+
+	- If next event is a time out (frame or ACK lost or ACK arrived after time out), the same packet with the same SN is sent to the channel in a new frame. 
+
+	- Else If next event is ACK without error and RN is equal to NEXT_EXPEXTED_ACK, the sender knows its packet has been received successfully, so it increments SN and NEXT_EXPECTED ACK by 1 (mod 2), generates a new apcket and sends a new frame. 
+
+	- NOTE: can only have 1 timeout in ES, as soon as the frame is completely passed on to the forward channel (ie. t_c + L/C) any outstanding time outs in ES have to be purged and a new time out at t_c + L/C + delta has to be registered. 
+
+	- Event processing takes non-zero time (ex: sending a frame takes L/C time)
+	- Assume that once the sender starts processing an event, it does not get interrupted by another event. The events are processedd sequentially without interruptions. 
