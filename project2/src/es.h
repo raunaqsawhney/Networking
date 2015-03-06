@@ -11,13 +11,16 @@ struct event {
     struct event* next;
 };
 
-struct packet {
+typedef struct frame {
 	int size;
 	int sequence_number
-} packet_t;
+	int error_flag;
+	double val;
+	char type;
+} frame_t;
 
 // PARAMS STRUCT
-struct params {
+typedef struct params {
 
 	// Sender parameters
 	int frame_header_len;
