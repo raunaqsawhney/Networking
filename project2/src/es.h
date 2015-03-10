@@ -12,11 +12,12 @@ struct event {
 };
 
 typedef struct frame {
-	int size;
-	int sequence_number
-	int error_flag;
-	double val;
 	char type;
+	double val;
+	int error_flag;
+	int sequence_number;
+	int size;
+	int is_null;
 } frame_t;
 
 // PARAMS STRUCT
@@ -24,26 +25,32 @@ typedef struct params {
 
 	// Sender parameters
 	int frame_header_len;
-	int packet_len = l
-	int delta_timeout;
+	int packet_len;
+	double delta_timeout;
 
 	// Channel parameters
 	int link_rate;
-	int tau;
+	double tau;
 	double ber;
 
 	// Experiment parameters
 	int duration;
 } params_t;
 
-/*
- * Adds an event to the ES
- * New event inserted at the right position (based on its time field)
- */
-void register_event(struct event *);
+typedef struct success {
+	int is_success;
+	double current_time;
+	int SN;
+	int frame_length;
+	int NEXT_EXPECTED_ACK;
+} success_t;
 
-struct event * dequeue();
-void send()
-void purge_time_out();
+success_t check_next_event(struct event *);
+struct event * read_es();	
+success_t do_send();
+frame_t send();
+frame_t channel(int, int);
+frame_t receiver(int, int);
+
 
 #endif

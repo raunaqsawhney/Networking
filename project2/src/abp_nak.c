@@ -19,6 +19,7 @@ params_t params;
 frame_t sender_buffer[1] = {};
 
 frame_t tmp_loc_for_packet_received;
+struct event *next_event_deleted;
 
 // ES Linked List
 struct event *first = (struct event *) NULL;
@@ -244,20 +245,9 @@ int do_abp()
 		else 
 		{
 			printf("ACK HAD ERRORS, but not LOST\n");
-			// Packet received back in sender was in error. READ ES AGAIN
-			struct event *next_event;
-			success_t success_from_check_next_event;
-
-
-			next_event = read_es();
-			CURRENT_TIME = next_event->val;
+			
+			CURRENT_TIME = next_event_deleted->val;
 			continue;
-
-			// while (success_from_check_next_event.is_success != 1)
-			// {
-			// 	success_from_check_next_event = check_next_event(next_event);
-			// }
-			// success_count++;
 		}
 		
 		throughput = ((double)success_count * ((double)params.packet_len))/CURRENT_TIME;
@@ -446,6 +436,8 @@ struct event * read_es()
 	printf("READ ES AFTER DELETE TOP:\n");
 	print_list(first);
 
+	next_event_deleted = next_event_tmp;
+
 	return next_event_tmp;
 }
 
@@ -497,7 +489,7 @@ success_t check_next_event(struct event *next_event)
 int main(int argc, char *argv[]) 
 {
 	srand(time(0));
-	fp = fopen("ABP.csv", "a+");
+	fp = fopen("ABP_NAK.csv", "a+");
 	fprintf(fp, "H,l,C,tau,delta,BER,T,thru\n");
 	
 	double throughput = 0.0;
@@ -512,7 +504,7 @@ int main(int argc, char *argv[])
 
 
 	params.tau = 0.005;
-	params.ber = 0.0;
+	params.ber = 0.00001;
 	params.delta_timeout = 2.5*params.tau;
 
 	throughput = do_abp();
