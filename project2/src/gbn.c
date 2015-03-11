@@ -272,24 +272,53 @@ void do_gbn()
 		add_to_buffer(frame);
 	}
 	print_buffer(buffer_first);
+	
+
+	// P = SN[1] = 0
 	P = buffer_first->sequence_number;
 
 	// Buffer of sender full. Now transmit sequentially the N Pakcetsx
+}
+
+int check_RN (frame_t packet_received)
+{
+	int RN_to_test = packet_received.sequence_number;
+	struct gbn_frame *ptr = buffer_first;
+	int current_RN = P;
+	int count = 1;
+
+	while (ptr != NULL)
+	{
+		current_RN = (current_RN + count) % (params.N + 1);
+		if (RN_to_test == current_RN)
+		{
+			// RN is one of of the expected sequence numbers (P+1, P+2, ..., P+N) mod (N+1)
+			return 1;
+		}
+		count++;
+	}
+	return 0;
 }
 
 success_t do_send()
 {
 	success_t success; 
 	struct gbn_frame *frame = buffer_first;
+	struct event *next_event;
+	int correct_RN = 0;
 
 	// Send packet to channel
 
-	while (frame != NULL)
+	while (frame->index < params.N)
 	{
 		CURRENT_TIME = CURRENT_TIME + frame->frame_length/params.link_rate;
 		frame->current_time = CURRENT_TIME;			// T[i]
 
-		// Send the packet to the chanlle with frame->current_time holding the value of CURRENT_TIME
+		// Register a timeout event at T[1] + delta
+		if (frame->index == 0)
+			register_event('t', CURRENT_TIME + params.delta_timeout);
+
+		// Send the packet to the channel with frame->current_time holding the value of CURRENT_TIME
 		frame_t packet_received = send(frame->current_time);
 		
 		if (!packet_received.is_null)
@@ -297,7 +326,6 @@ success_t do_send()
 			register_event('a', packet_received.val);
 		}
 
-		struct event *next_event;
 		next_event = read_es();
 
 		if (next_event->type != 'a' || next_event->type != 't')
@@ -307,50 +335,32 @@ success_t do_send()
 		}
 		else if (next_event->type == 'a' || next_event->type == 't')
 		{
-			// THIS IS THE HARD SHIT RIGHT HERE
 			if (next_event->type == 't')
 			{
 				// Retransmit all packets in the buffer right away
 				// Update the times
+				// Purge all outstanding timeouts in the ES
+				// Go back to top of while loop
+				// Update the time to the new current time
+				// Retransmit again all frames from the first element in the buffer
+				
+				list_cleanup(first);
+				frame = buffer_first;
+				continue;
 			}
 			else if (next_event->type == 'a')
 			{
-				if (packet_received.error_flag == 0)
+				correct_RN = check_RN(packet_received);
+				if (packet_received.error_flag == 0 && correct_RN)
 				{
-					// ACK HAD NO ERRORS
-					// CHECK if packet_received->sequence_number is either of P+1, P+2...P+N (mod N+1)
-					int i;
-					struct gbn_frame *ptr = buffer_first;
-					int RN_to_test = 0;
-					int window_sliding_amount = 0;
-					int count = 0;
-
-					while (ptr != NULL && count != params.N)
-					{
-						RN_to_test = (P + count) % (params.N + 1);
-						if (packet_received.sequence_number == RN_to_test)
-						{
-							// Sender knows one or more packets received correctly
-							
-							// Slide the window in buffer by window_sliding_amount to the left
-							window_sliding_amount = (packet_received.sequence_number - P) % (params.N + 1);
-							do_window_slide(window_sliding_amount);	
-
-							P = packet_received.sequence_number;
-						}
-						count++;
-						ptr = ptr-next;
-					}
-
-					if (packet_received.error_flag == 1)
-					{
-						// ACK Had Error
-						// Check if RN is NOT in P+1,P+2,...P+N mod (N+1)
-					}
+					// SHIFT WINDOW
 				}
-				else if (SITUATION 2)
+				else if (packet_received.error_flag == 1 || !correct_RN)
 				{
-					// ACK ERROR OR RN = P
+					// IGNORE
+					// Continue sending the next packet
+					frame = frame->next;
+					continue;
 				}
 			}
 		}
@@ -579,7 +589,7 @@ int main(int argc, char *argv[])
 	srand(time(0));	
 	double throughput = 0.0;
 
-	params.N = 5;
+	params.N = 4;
 
 	params.frame_header_len = H;
 	params.packet_len = l;
