@@ -35,6 +35,9 @@ typedef struct params {
 
 	// Experiment parameters
 	int duration;
+
+	// For GBN Buffer
+	int N;
 } params_t;
 
 typedef struct success {
@@ -44,6 +47,14 @@ typedef struct success {
 	int frame_length;
 	int NEXT_EXPECTED_ACK;
 } success_t;
+
+struct gbn_frame {
+    int index;
+    int sequence_number;
+    int frame_length;
+    double current_time;
+    struct gbn_frame* next;
+};
 
 success_t check_next_event(struct event *);
 struct event * read_es();	

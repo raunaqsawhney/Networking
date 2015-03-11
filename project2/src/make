@@ -1,0 +1,3 @@
+gbn: gbn.c
+    $(RM) gbn
+    gcc -o gbn gbn.c 
