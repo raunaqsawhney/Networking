@@ -11,18 +11,45 @@ FILE *fp;
 
 #define H 54*8
 #define l 1500*8
+#define C 5000000
+#define D 10000
 #define BER_THRESHOLD 5
 
 params_t params;
 
-// Create a new ABP Sender Buffer to hold frames
-frame_t sender_buffer[1] = {};
+// Create a new frame
+frame_t frame;
 
+// Create a new success struct
+success_t success;
+
+frame_t sender_buffer[1] = {};
 frame_t tmp_loc_for_packet_received;
 
 // ES Linked List
 struct event *first = (struct event *) NULL;
 struct event *last = (struct event *) NULL;
+
+// Globally Initialize Sender
+int SN = 0;
+int NEXT_EXPECTED_ACK = 1;
+int NEXT_EXPECTED_FRAME = 0;
+double CURRENT_TIME = 0.0;
+int frame_length;
+double transmission_delay;	// L/C
+
+void reinit_global_vars()
+{
+	frame_t sender_buffer[1] = {};
+	first = NULL;
+	last = NULL;
+
+	// Globally Initialize Sender
+	SN = 0;
+	NEXT_EXPECTED_ACK = 1;
+	NEXT_EXPECTED_FRAME = 0;
+	CURRENT_TIME = 0.0;
+}
 
 void print_event(struct event *ptr)
 {
@@ -197,24 +224,9 @@ int gen_rand(double probability)
     	return 1;
 }
 
-// Globally Initialize Sender
-int SN = 0;
-int NEXT_EXPECTED_ACK = 1;
-int NEXT_EXPECTED_FRAME = 0;
-double CURRENT_TIME = 0.0;
-int frame_length;
-double transmission_delay;	// L/C
-
-
-int do_abp() 
+double do_abp() 
 {
 	double throughput = 0.0;
-
-	// Create a new frame
-	frame_t frame;
-	
-	// Create a new success struct
-	success_t success;
 	
 	int success_count = 0;
 
@@ -253,11 +265,6 @@ int do_abp()
 			CURRENT_TIME = next_event->val;
 			continue;
 
-			// while (success_from_check_next_event.is_success != 1)
-			// {
-			// 	success_from_check_next_event = check_next_event(next_event);
-			// }
-			// success_count++;
 		}
 		
 		throughput = ((double)success_count * ((double)params.packet_len))/CURRENT_TIME;
@@ -498,61 +505,352 @@ int main(int argc, char *argv[])
 {
 	srand(time(0));
 	fp = fopen("ABP.csv", "a+");
-	fprintf(fp, "H,l,C,tau,delta,BER,T,thru\n");
 	
 	double throughput = 0.0;
 
 	params.frame_header_len = H;
 	params.packet_len = l;
-	params.link_rate = 5000000;
-	params.duration = 10000;
+	params.link_rate = C;
+	params.duration = D;
 
 	frame_length = params.frame_header_len + params.packet_len;
 	transmission_delay = (double)frame_length / (double)params.link_rate;	// L/C
 
+	double tau_set[2] = {0.005, 0.25};
+	double delta_set[10] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0], 2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
+	double ber_set[3] = {0.0, 0.00001, 0.0001};
 
-	params.tau = 0.005;
-	params.ber = 0.0;
-	params.delta_timeout = 2.5*params.tau;
 
+	//a1
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[0];
+	params.ber = ber_set[0];
 	throughput = do_abp();
-	printf("THRU:\t%f\n", throughput);
-
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
 
 	list_cleanup(first);
 
-	// double tau_set[1] = {0.005};
-	// double delta_set_0[5] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0]};
-	// //double delta_set_1[5] = {2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
-	// double ber_set[3] = {0.0, 0.0001, 0.00001};
+	//a2
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[0];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
 
-	// int i, j, k;
-	// for (i = 0; i < sizeof(ber_set)/sizeof(ber_set[0]); i++)
-	// {
-	// 	for (j = 0; j < sizeof(delta_set_0)/sizeof(delta_set_0[0]); j++)
-	// 	{
-	// 		for (k = 0; k < sizeof(tau_set)/sizeof(tau_set[0]); k++)
-	// 		{
-	// 			printf("\nPARAMS:\t%f, %f, %f\n", tau_set[k], ber_set[i], delta_set_0[j]);
-	// 			params.tau = tau_set[k];
-	// 			params.ber = ber_set[i];
-	// 			params.delta_timeout = delta_set_0[j];
+	list_cleanup(first);
 
-	// 			// Globally Initialize Sender
-	// 			int SN = 0;
-	// 			int NEXT_EXPECTED_ACK = 1;
-	// 			int NEXT_EXPECTED_FRAME = 0;
-	// 			double CURRENT_TIME = 0.0;
+	// //a3
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[0];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
 
-	// 			throughput = do_abp();
-	// 			fprintf(fp, "%d, %d, %d, %f, %f, %f, %d, %f\n", params.frame_header_len, params.packet_len, params.link_rate, tau_set[k], delta_set_0[j], ber_set[i], params.duration, throughput);
-				
-	// 			list_cleanup(first);
-	// 		}
-	// 	}
-	// }
+	list_cleanup(first);
+
+	// // //a4
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[5];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	// //a5
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[5];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	// //a6
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[5];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//b1
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[1];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	// //b2
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[1];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//b3
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[1];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//b4
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[6];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//b5
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[6];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//b6
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[6];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c1
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[2];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c2
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[2];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c3
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[2];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c4
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[7];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c5
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[7];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//c6
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[7];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//d1
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[3];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//d2
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[3];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//d3
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[3];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+
+	//d4
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[8];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//d5
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[8];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//d6
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[8];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//e1
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[4];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//e2
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[4];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//e3
+	params.tau = tau_set[0];
+	params.delta_timeout = delta_set[4];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+
+	//e4
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[9];
+	params.ber = ber_set[0];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//e5
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[9];
+	params.ber = ber_set[1];
+	throughput = do_abp();
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
+	//e6
+	params.tau = tau_set[1];
+	params.delta_timeout = delta_set[9];
+	params.ber = ber_set[2];
+	throughput = do_abp();
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+
+	list_cleanup(first);
+
 
 	fclose(fp);
-
-	list_cleanup(first);
 }
