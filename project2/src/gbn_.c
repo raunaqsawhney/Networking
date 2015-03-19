@@ -12,7 +12,7 @@
 #define BER_THRESHOLD 5
 #define N 4
 #define C 5000000
-#define DURATION 10000
+#define DURATION 1000
 
 double tau = 0.0;
 double ber = 0.0;
@@ -286,8 +286,8 @@ int check_RN(int sequence_number)
 void window_slide(int window_slide_amount)
 {
 	success_count += window_slide_amount;
-
-	counter = (counter - window_slide_amount);
+	counter -= window_slide_amount;
+	
 	// Shift the counter left by some amount
 	int i;
 
@@ -312,7 +312,8 @@ void window_slide(int window_slide_amount)
 
 	printf("\n");
 
-	for (i = window_slide_amount; i < N ; i++)
+	i = 0;
+	for (i = window_slide_amount; i < N; i++)
 	{
 		SN[i - window_slide_amount] = SN[i];
 		T[i - window_slide_amount] = T[i];
@@ -481,7 +482,7 @@ void sender()
 		}
 
 		send(SN[counter], T[counter]);
-		next_event = read_es();
+		next_event = first;
 
 		if ((next_event->val < T[counter]) && (next_event->type == 't'))
 		{
@@ -495,7 +496,7 @@ void sender()
 		{
 			printf("CONDITION 2\n");
 			P = SN[0];
-			window_slide_amount = (next_event->sequence_number - P) % (N + 1);
+			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
 			purge_timeout(timeout_ptr);
 			register_event('t', T[0] + delta_timeout, -1, -1);
@@ -555,7 +556,7 @@ void event_processor()
 			printf("CONDITION 5\n");
 
 			P = SN[0];
-			window_slide_amount = (next_event->sequence_number - P) % (N + 1);
+			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
 			purge_timeout(timeout_ptr);
 			register_event('t', T[0] + delta_timeout, -1, -1);
@@ -580,7 +581,7 @@ int main(int argc, char *argv[])
 	srand(time(0));	
 
 	tau = 0.005;
-	ber = 0;
+	ber = 0.0001;
 	delta_timeout = 2.5*tau;
 
 	transmission_delay = ((double)H + (double)l)/(double)C;
