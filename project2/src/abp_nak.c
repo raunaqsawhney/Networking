@@ -277,7 +277,7 @@ success_t do_send()
 
 	// Send packet to channel
 	CURRENT_TIME = CURRENT_TIME + transmission_delay;
-	frame_t packet_received = send();
+	frame_t packet_received = send_abp();
 
 	tmp_loc_for_packet_received = packet_received;
 	
@@ -298,7 +298,7 @@ success_t do_send()
 	return success;
 }
 
-frame_t send()
+frame_t send_abp()
 {
 	// Send should return an ACK event, but may not if there are errors
 	// The ACK event must have a sequence number RN, error_flag, and type 
@@ -313,7 +313,7 @@ frame_t send()
 	#ifdef DEBUG
 		printf("INPUT TO F_CHANNEL:\tTime = %f\tSN = %d\tL = %d\n", CURRENT_TIME, SN, frame_length);
 	#endif
-	frame_in_send = channel(SN, frame_length);
+	frame_in_send = channel_abp(SN, frame_length);
 	
 	#ifdef DEBUG
 		printf("INPUT TO RECEIVER:\tTime = %f\tSN = %d\tERROR = %d\tIS_NULL = %d\n", CURRENT_TIME, frame_in_send.sequence_number, frame_in_send.error_flag, frame_in_send.is_null);
@@ -326,12 +326,12 @@ frame_t send()
 		return send_output;
 	}
 
-	frame_in_send = receiver(frame_in_send.sequence_number, frame_in_send.error_flag);
+	frame_in_send = receiver_abp(frame_in_send.sequence_number, frame_in_send.error_flag);
 	#ifdef DEBUG
 		printf("INPUT TO R_CHANNEL:\tTime = %f\tRN = %d\tH = %d\n", CURRENT_TIME, frame_in_send.sequence_number, H);
 	#endif
 
-	frame_in_send = channel(frame_in_send.sequence_number, H);
+	frame_in_send = channel_abp(frame_in_send.sequence_number, H);
 	#ifdef DEBUG
 		printf("INPUT TO SENDER:\tTime = %f\tRN = %d\tERROR = %d\tIS_NULL = %d\n", CURRENT_TIME, frame_in_send.sequence_number, frame_in_send.error_flag, frame_in_send.is_null);
 	#endif
@@ -352,7 +352,7 @@ frame_t send()
 
 }
 
-frame_t channel(int sequence_number, int frame_length)
+frame_t channel_abp(int sequence_number, int frame_length)
 {
 	int rand_num = 0;					// 0 or 1
 	int zero_count = 0;					// 0 counter for bits in error
@@ -401,7 +401,7 @@ frame_t channel(int sequence_number, int frame_length)
 	return channel_output;
 }
 
-frame_t receiver(int sequence_number, int error_flag)
+frame_t receiver_abp(int sequence_number, int error_flag)
 {
 	int RN = 0;
 	int forward_channel_error = error_flag;

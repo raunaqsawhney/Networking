@@ -46,10 +46,12 @@ typedef struct success {
 	int SN;
 	int frame_length;
 	int NEXT_EXPECTED_ACK;
+	int num_success_packets;
 } success_t;
 
 struct gbn_frame {
     int index;
+    int count;
     int sequence_number;
     int frame_length;
     double current_time;
@@ -58,10 +60,10 @@ struct gbn_frame {
 
 success_t check_next_event(struct event *);
 struct event * read_es();	
-success_t do_send();
-frame_t send();
-frame_t channel(int, int);
-frame_t receiver(int, int);
+frame_t send_abp();
+frame_t channel_abp(int, int);
+frame_t receiver_abp(int, int);
 
+success_t do_send();
 
 #endif

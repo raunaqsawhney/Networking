@@ -1,3 +1,12 @@
 gbn: gbn.c
     $(RM) gbn
-    gcc -o gbn gbn.c 
+    gcc -o gbn gbn.c
+
+
+abp: abp.c
+    $(RM) abp
+    gcc -o abp abp.c
+    
+abp_nak: abp_nak.c
+    $(RM) abp_nak
+    gcc -o abp_nak abp_nak.c

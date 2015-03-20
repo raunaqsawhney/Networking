@@ -14,6 +14,8 @@
 #define C 5000000
 #define DURATION 1000
 
+FILE *fp;
+
 double tau = 0.0;
 double ber = 0.0;
 double delta_timeout = 0.0;
@@ -38,6 +40,34 @@ int success_count = 0;
 int P = 0;
 
 struct event *timeout_ptr = (struct event *)NULL;
+
+void reinit_global_vars()
+{
+	tau = 0.0;
+	ber = 0.0;
+	delta_timeout = 0.0;
+	throughput = 0.0;
+
+	first = NULL;
+	last = NULL;
+
+	SN[N] = {};
+	T[N] = {};
+	NEXT_EXPECTED_ACK[N] = {};
+	NEXT_EXPECTED_FRAME = 0;
+
+	T_c = 0.0;
+	counter = 0;
+
+	transmission_delay = 0.0;
+	header_transmission_delay = 0.0;
+	frame_length = 0;
+	success_count = 0;
+
+	P = 0;
+
+	timeout_ptr = NULL;
+}
 
 int gen_rand(double probability)
 {
@@ -409,12 +439,15 @@ frame_t receiver(int sequence_number, double T, int error_flag)
 	frame_t ack;
 	int forward_channel_error = error_flag;
 
+
 	if (forward_channel_error == 0 && sequence_number == NEXT_EXPECTED_FRAME)
 	{
 		NEXT_EXPECTED_FRAME = (NEXT_EXPECTED_FRAME + 1) % (N + 1);
 		// New and successfully delivered packet
 		// Send to layer 3
 	} 
+
+
 
 	ack.size = H;
 	ack.sequence_number = NEXT_EXPECTED_FRAME;
@@ -533,7 +566,6 @@ void event_processor()
 
 	while (!is_empty())
 	{
-		printf("[E]SUCCESS COUNT: %d\n", success_count);
 		if (success_count == DURATION)
 		{
 			printf("BREAK\n");
@@ -547,8 +579,8 @@ void event_processor()
 		if (next_event->type == 't')
 		{
 			printf("CONDITION 4\n");
-			counter = 0;
 			purge_timeout(timeout_ptr);
+			counter = 0;
 			sender();
 		}
 		else if (next_event->type == 'a' && !next_event->error_flag && check_RN(next_event->sequence_number))
@@ -578,7 +610,8 @@ void event_processor()
 
 int main(int argc, char *argv[]) 
 {
-	srand(time(0));	
+	srand(time(0));
+	fp = fopen("GBN.csv", "a+");
 
 	tau = 0.005;
 	ber = 0.0001;
@@ -589,6 +622,10 @@ int main(int argc, char *argv[])
 
 	frame_length = H + l;
 
+	double tau_set[2] = {0.005, 0.25};
+	double delta_set[10] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0], 2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
+	double ber_set[3] = {0.0, 0.00001, 0.0001};
+
 	initialize();
 	sender();
 	event_processor();
@@ -597,5 +634,28 @@ int main(int argc, char *argv[])
 	
 	printf("\n");
 	printf("T_C: %f | Throughput: %f\n", T_c, throughput);
+
+	//a1
+	tau = tau_set[0];
+	delta_timeout = delta_set[0];
+	ber = ber_set[0];
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION * ((double)l))/T_c;
+	fprintf(fp, "%f," , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+	list_cleanup(first);
+	fclose(fp);
+
+
+
+
+
+
+
+
+
 
 }

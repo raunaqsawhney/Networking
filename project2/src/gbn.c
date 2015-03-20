@@ -10,37 +10,81 @@
 #define H 54*8
 #define l 1500*8
 #define BER_THRESHOLD 5
+#define N 4
+#define C 5000000
+#define DURATION 10000
 
-// Global struct to hold parameters needed throughout the presentation
-params_t params;
+FILE *fp;
 
-// Create a new ABP Sender Buffer to hold frames
-frame_t sender_buffer[] = {};
+double tau = 0.0;
+double ber = 0.0;
+double delta_timeout = 0.0;
+double throughput = 0.0;
 
-frame_t tmp_loc_for_packet_received;
-
-// ES Linked List
 struct event *first = (struct event *) NULL;
 struct event *last = (struct event *) NULL;
 
-// GBN Buffer (As a LINKED LIST, with top pointing to first item added)
-struct gbn_frame *buffer_first = (struct gbn_frame *) NULL;
-struct gbn_frame *buffer_last = (struct gbn_frame *) NULL;
-
-// Globally Initialize Sender
-int SN = 0;
-int NEXT_EXPECTED_ACK = 1;
+int SN[N] = {};
+double T[N] = {};
+int NEXT_EXPECTED_ACK[N] = {};
 int NEXT_EXPECTED_FRAME = 0;
-double CURRENT_TIME = 0.0;
-int frame_length;
-double transmission_delay;			// L/C
+
+double T_c = 0.0;
+int counter = 0;
+
+double transmission_delay = 0.0;
+double header_transmission_delay = 0.0;
+int frame_length = 0;
+int success_count = 0;
+
 int P = 0;
+
+struct event *timeout_ptr = (struct event *)NULL;
+
+void reinit_global_vars()
+{
+
+	first = NULL;
+	last = NULL;
+
+	int i;
+	for (i = 0; i < N; i ++)
+	{
+		SN[i] = 0;
+		T[i] = 0;
+		NEXT_EXPECTED_ACK[i] = 0;
+	}
+
+	NEXT_EXPECTED_FRAME = 0;
+
+	T_c = 0.0;
+	counter = 0;
+
+	transmission_delay = 0.0;
+	header_transmission_delay = 0.0;
+	frame_length = 0;
+	success_count = 0;
+
+	P = 0;
+
+	timeout_ptr = NULL;
+}
+
+int gen_rand(double probability)
+{
+    double rndDouble = (double)rand() / RAND_MAX;
+
+    if (rndDouble < probability)
+    	return 0;
+    else
+    	return 1;
+}
 
 void print_event(struct event *ptr)
 {
-
 	printf("Type:\t%c\n", ptr->type);
 	printf("Time:\t%f\n", ptr->val);
+	printf("\n");
 }
 
 void print_list(struct event *ptr)
@@ -52,42 +96,7 @@ void print_list(struct event *ptr)
 	}
 }
 
-void print_item(struct gbn_frame *ptr)
-{
-	printf("INDEX:\t%d\n", ptr->index);
-	printf("SN:\t%d\n", ptr->sequence_number);
-	printf("LEN:\t%d\n", ptr->frame_length);
-	printf("\n");
-}
-
-void print_buffer(struct gbn_frame *ptr)
-{
-	while (ptr != NULL)
-	{
-		print_item(ptr);
-		ptr = ptr->next;
-	}
-}
-
-struct gbn_frame * init_buffer_item(int index)
-{
-	struct gbn_frame *ptr;
-	ptr = (struct gbn_frame *)malloc(sizeof(struct gbn_frame));
-	if (ptr == NULL)
-	{
-		return (struct gbn_frame *) NULL;
-	}
-	else
-	{
-		ptr->index = index;
-		ptr->sequence_number = SN;
-		ptr->frame_length = frame_length;
-		return ptr;
-	}
-	free(ptr);
-}
-
-struct event * list_init_event(char type, double val)
+struct event * list_init_event(char type, double val, int error_flag, int sequence_number)
 {
 	struct event *ptr;
 	ptr = (struct event *)malloc(sizeof(struct event));
@@ -99,39 +108,41 @@ struct event * list_init_event(char type, double val)
 	{
 		ptr->type = type;
 		ptr->val = val;
+		ptr->error_flag = error_flag;
+		ptr->sequence_number = sequence_number;
+
+		if (type == 't')
+			timeout_ptr = ptr;
+
 		return ptr;
 	}
+
 	free(ptr);
 }
 
-void list_add_event(struct event *new)
+void list_cleanup( struct event *ptr )
 {
-	
-	if (first == NULL)
-	{
-		first = new;
-	}
-	else
-	{
-		last->next = new;
-	}
-	new->next = NULL;
-	last = new;
-}
 
-void add_to_buffer(struct gbn_frame *new)
-{
-	
-	if (buffer_first == NULL)
-	{
-		buffer_first = new;
-	}
-	else
-	{
-		buffer_last->next = new;
-	}
-	new->next = NULL;
-	buffer_last = new;
+   struct event *temp;
+
+   if( first == NULL ) return; 
+
+   if( ptr == first ) {      
+       first = NULL;         
+       last = NULL;          
+   }
+   else {
+       temp = first;          
+       while( temp->next != ptr )         
+           temp = temp->next;
+       last = temp;                        
+   }
+
+   while( ptr != NULL ) {   
+      temp = ptr->next;     
+      free( ptr );          
+      ptr = temp;           
+   }
 }
 
 void list_insert_event(struct event *new)
@@ -212,258 +223,24 @@ void list_delete_event(struct event *ptr)
 	}
 }
 
-void list_cleanup( struct event *ptr )
+void print_buffer_sn()
 {
-
-   struct event *temp;
-
-   if( first == NULL ) return; 
-
-   if( ptr == first ) {      
-       first = NULL;         
-       last = NULL;          
-   }
-   else {
-       temp = first;          
-       while( temp->next != ptr )         
-           temp = temp->next;
-       last = temp;                        
-   }
-
-   while( ptr != NULL ) {   
-      temp = ptr->next;     
-      free( ptr );          
-      ptr = temp;           
-   }
-}
-
-void register_event(char type, double val)
-{
-	struct event *ptr;
-
-	// Initialize event with type and time
-	ptr = list_init_event(type, val);
-
-	// Insert the event into the ES
-	list_insert_event(ptr);
-}
-
-int gen_rand(double probability)
-{
-
-    double rndDouble = (double)rand() / RAND_MAX;
-
-    if (rndDouble < probability)
-    	return 0;
-    else
-    	return 1;
-}
-
-void do_gbn() 
-{
-	int i = 0;
-	struct gbn_frame *frame;
-
-	// Fill buffer with N GBN packets from Layer 3
-	for (i = 0; i < params.N; i++)
+	printf("PRINT BUFFER SN\n");
+	int i;
+	for (i = 0; i < N; i++)
 	{
-		frame = init_buffer_item(i);
-		SN = (SN + 1) % (params.N + 1);
-		add_to_buffer(frame);
-	}
-	print_buffer(buffer_first);
-	
-
-	// P = SN[1] = 0
-	P = buffer_first->sequence_number;
-
-	// Buffer of sender full. Now transmit sequentially the N Pakcetsx
-}
-
-int check_RN (frame_t packet_received)
-{
-	int RN_to_test = packet_received.sequence_number;
-	struct gbn_frame *ptr = buffer_first;
-	int current_RN = P;
-	int count = 1;
-
-	while (ptr != NULL)
-	{
-		current_RN = (current_RN + count) % (params.N + 1);
-		if (RN_to_test == current_RN)
-		{
-			// RN is one of of the expected sequence numbers (P+1, P+2, ..., P+N) mod (N+1)
-			return 1;
-		}
-		count++;
-	}
-	return 0;
-}
-
-success_t do_send()
-{
-	success_t success; 
-	struct gbn_frame *frame = buffer_first;
-	struct event *next_event;
-	int correct_RN = 0;
-
-	// Send packet to channel
-
-	while (frame->index < params.N)
-	{
-		CURRENT_TIME = CURRENT_TIME + frame->frame_length/params.link_rate;
-		frame->current_time = CURRENT_TIME;			// T[i]
-
-		// Register a timeout event at T[1] + delta
-		if (frame->index == 0)
-			register_event('t', CURRENT_TIME + params.delta_timeout);
-
-		// Send the packet to the channel with frame->current_time holding the value of CURRENT_TIME
-		frame_t packet_received = send(frame->current_time);
-		
-		if (!packet_received.is_null)
-		{
-			register_event('a', packet_received.val);
-		}
-
-		next_event = read_es();
-
-		if (next_event->type != 'a' || next_event->type != 't')
-		{
-			frame = frame->next;
-			continue;
-		}
-		else if (next_event->type == 'a' || next_event->type == 't')
-		{
-			if (next_event->type == 't')
-			{
-				// Retransmit all packets in the buffer right away
-				// Update the times
-				// Purge all outstanding timeouts in the ES
-				// Go back to top of while loop
-				// Update the time to the new current time
-				// Retransmit again all frames from the first element in the buffer
-				
-				list_cleanup(first);
-				frame = buffer_first;
-				continue;
-			}
-			else if (next_event->type == 'a')
-			{
-				correct_RN = check_RN(packet_received);
-				if (packet_received.error_flag == 0 && correct_RN)
-				{
-					// SHIFT WINDOW
-				}
-				else if (packet_received.error_flag == 1 || !correct_RN)
-				{
-					// IGNORE
-					// Continue sending the next packet
-					frame = frame->next;
-					continue;
-				}
-			}
-		}
-		else if (frame->index == params.N - 1)
-		{
-			// Current sent packet is the last packet in the current window (Nth packet)
-			// Dequeue the earliest event from ES and process it acordingly
-		}
-
-	}
-
-	return success;
-}
-
-void do_window_slide(window_sliding_amount)
-{
-	struct gbn_frame *ptr = buffer_first;
-	struct gbn_frame *tmp;
-	int i = 0;
-	int fetch_from = 0;
-
-	for (i = 0; i < window_sliding_amount; i++)
-	{
-		fetch_from = window_sliding_amount + (i + 1);
-
-		tmp = get_frame_in_buf_for_new_loc(fetch_from);
-		
-		// Have the pointer to the new buffer head
-		// Move it to ith location in buffer
-		
-		while (ptr->index != i)
-		{
-			ptr = ptr->next;
-		}
-		ptr = tmp;
+		printf("[%d] - %d\n", i, SN[i]);
 	}
 }
 
-struct gbn_frame * get_frame_in_buf_for_new_loc(int fetch_from)
+void print_buffer_t()
 {
-	struct gbn_frame *ptr = buffer_first;
-	while (ptr->index != fetch_from)
+	printf("PRINT BUFFER T\n");
+	int i;
+	for (i = 0; i < N; i++)
 	{
-		ptr = ptr->next;
+		printf("[%d] - %f\n", i, T[i]);
 	}
-	return ptr;
-}
-
-frame_t send(frame_t frame)
-{
-	// Send should return an ACK event, but may not if there are errors
-	// The ACK event must have a sequence number RN, error_flag, and type 
-	
-	list_cleanup(first);
-
-	register_event('t', frame->current_time + params.delta_timeout);
-
-	frame_t frame_in_send;
-
-	#ifdef DEBUG
-		printf("INPUT TO F_CHANNEL:\tTime = %f\tSN = %d\tL = %d\n", CURRENT_TIME, SN, frame_length);
-	#endif
-	frame_in_send = channel(SN, frame_length);
-	
-	#ifdef DEBUG
-		printf("INPUT TO RECEIVER:\tTime = %f\tSN = %d\tERROR = %d\tIS_NULL = %d\n", CURRENT_TIME, frame_in_send.sequence_number, frame_in_send.error_flag, frame_in_send.is_null);
-	#endif
-
-	// Check for NULL Frame
-	if (frame_in_send.is_null)
-	{
-		send_output.is_null = 1;
-		return send_output;
-	}
-
-	frame_in_send = receiver(frame_in_send.sequence_number, frame_in_send.error_flag);
-	#ifdef DEBUG
-		printf("INPUT TO R_CHANNEL:\tTime = %f\tRN = %d\tH = %d\n", CURRENT_TIME, frame_in_send.sequence_number, H);
-	#endif
-
-	frame_in_send = channel(frame_in_send.sequence_number, H);
-	#ifdef DEBUG
-		printf("INPUT TO SENDER:\tTime = %f\tRN = %d\tERROR = %d\tIS_NULL = %d\n", CURRENT_TIME, frame_in_send.sequence_number, frame_in_send.error_flag, frame_in_send.is_null);
-	#endif
-
-	// Frame has passed the reverse channel. Time to send it back to sender
-
-	frame_t send_output;
-
-	// Check for NULL ACK
-	if (frame_in_send.is_null)
-	{
-		send_output.is_null = 1;
-		return send_output;
-	}
-
-	// At this point, we are sure we have an ACK
-	// Return it, and register with ES
-	send_output.is_null = 0;
-	send_output = frame_in_send;
-
-	return send_output;
-
 }
 
 struct event * read_es()
@@ -488,65 +265,144 @@ struct event * read_es()
 	return next_event_tmp;
 }
 
-success_t check_next_event(struct event *next_event)
+void purge_timeout (struct event *ptr)
 {
-	success_t success;
+	printf("BEFORE PURGE\n");
+	print_list(first);
 
-	if (next_event->type == 'a')
-	{
-		success_t ack_success; 
-		if (tmp_loc_for_packet_received.error_flag == 0 && tmp_loc_for_packet_received.sequence_number == NEXT_EXPECTED_ACK)
-		{
-			// Packet that was received from send() is error free and is the expected ACK. GOOD.
-			SN = (SN + 1) % 2;
-			NEXT_EXPECTED_ACK = (NEXT_EXPECTED_ACK + 1) % 2;
+	struct event *temp;
 
-			ack_success.SN = SN;
-			ack_success.NEXT_EXPECTED_ACK = NEXT_EXPECTED_ACK;
-			ack_success.current_time = tmp_loc_for_packet_received.val;
-			CURRENT_TIME = ack_success.current_time;
+	if (first == NULL)
+   		return; 
 
-			ack_success.is_success = 1;
-
-			success = ack_success;
-		}
-
-		else if (tmp_loc_for_packet_received.error_flag == 1 || tmp_loc_for_packet_received.sequence_number != NEXT_EXPECTED_ACK)
-		{
-			// DO NOTHING
-			success.is_success = 0;
-		}
-	} 
-	else if (next_event->type == 't')
-	{
-		//Retransmit
-		success_t retransmit_success;
-		while (retransmit_success.is_success != 1)
-		{
-			retransmit_success = do_send();
-		}
-
-		retransmit_success.is_success = 1;
-		success = retransmit_success;
+	if (ptr == first && ptr->type == 't') { 
+		printf("TO PURGE:\n");
+		print_event(first); 
+		list_delete_event(first);         
 	}
+    else
+    {
+    	temp = first;          
+       	while(temp->type != 't') {
+       		temp = temp->next;
+       		if (!temp)
+       			break;
+       	}
 
-	return success;
+       	if (temp != NULL)
+		{	
+	       	printf("TO PURGE:\n");
+	       	print_event(temp);
+			list_delete_event(temp);   
+       	}                  
+   	}
+   	printf("AFTER PURGE\n");
+	print_list(first); 
 }
 
+int check_RN(int sequence_number)
+{
+	int i;
+	for (i = 0; i < N; i++)
+	{
+		if (sequence_number == NEXT_EXPECTED_ACK[i])
+		{
+			printf("CHECK_RN -- RN = %d | NEA[%d] = %d\n", sequence_number, i, NEXT_EXPECTED_ACK[i]);
+			return 1;
+		}
+	}
+	return 0;
+}
 
+void window_slide(int window_slide_amount)
+{
+	success_count += window_slide_amount;
+	counter -= window_slide_amount;
+	
+	// Shift the counter left by some amount
+	int i;
 
-frame_t channel(int sequence_number, int frame_length)
+	printf("BEFORE\n");
+	printf("------SN------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%d\n", SN[i]);
+	}
+
+	printf("------T------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%f\n", T[i]);
+	}
+
+	printf("------NEA------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%d\n", NEXT_EXPECTED_ACK[i]);
+	}
+
+	printf("\n");
+
+	i = 0;
+	for (i = window_slide_amount; i < N; i++)
+	{
+		SN[i - window_slide_amount] = SN[i];
+		T[i - window_slide_amount] = T[i];
+		NEXT_EXPECTED_ACK[i - window_slide_amount] = NEXT_EXPECTED_ACK[i];
+	}
+
+	printf("AFTER\n");
+	printf("------SN------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%d\n", SN[i]);
+	}
+
+	printf("------T------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%f\n", T[i]);
+	}
+
+	printf("------NEA------\n");
+	for (i = 0; i < N; i++)
+	{
+		printf("%d\n", NEXT_EXPECTED_ACK[i]);
+	}
+}
+
+void register_event(char type, double val, int error_flag, int sequence_number)
+{
+	struct event *ptr;
+
+	// Initialize event with type and time
+	ptr = list_init_event(type, val, error_flag, sequence_number);
+
+	// Insert the event into the ES
+	list_insert_event(ptr);
+}
+
+void initialize()
+{
+	T_c = 0.0;
+	counter = 0;
+	SN[0] = 0;
+	NEXT_EXPECTED_FRAME = 0;
+	// NEXT_EXPECTED_ACK ALREADY INITIALIZED AS EMPTY LIST
+}
+
+frame_t channel(int sequence_number, double T, int L)
 {
 	int rand_num = 0;					// 0 or 1
 	int zero_count = 0;					// 0 counter for bits in error
-
 	frame_t channel_output;
+
 	int i; 
 
 	// Forward Channel
 	for (i = 0; i < frame_length; i++)
 	{
-		rand_num = gen_rand(params.ber);
+		rand_num = gen_rand(ber);
 		if (rand_num == 0)
 			zero_count++;
 	}
@@ -554,21 +410,16 @@ frame_t channel(int sequence_number, int frame_length)
 	if (zero_count == 0)
 	{
 		// Correct frame
-		channel_output.val = CURRENT_TIME + params.tau;
-		CURRENT_TIME = channel_output.val;
-
+		channel_output.val = T + tau;
 		channel_output.error_flag = 0;
 		channel_output.sequence_number = sequence_number;
 		channel_output.is_null = 0;
 		channel_output.size = -1;
-
 	}
 	else if (zero_count >= 1 && zero_count <= 4)
 	{
 		// Frame/ACK Error
-		channel_output.val = CURRENT_TIME + params.tau;
-		CURRENT_TIME = channel_output.val;
-
+		channel_output.val = T + tau;
 		channel_output.error_flag = 1;
 		channel_output.sequence_number = sequence_number;
 		channel_output.is_null = 0;
@@ -584,27 +435,276 @@ frame_t channel(int sequence_number, int frame_length)
 	return channel_output;
 }
 
+frame_t receiver(int sequence_number, double T, int error_flag)
+{
+	frame_t ack;
+	int forward_channel_error = error_flag;
+
+
+	if (forward_channel_error == 0 && sequence_number == NEXT_EXPECTED_FRAME)
+	{
+		NEXT_EXPECTED_FRAME = (NEXT_EXPECTED_FRAME + 1) % (N + 1);
+		// New and successfully delivered packet
+		// Send to layer 3
+	} 
+
+
+
+	ack.size = H;
+	ack.sequence_number = NEXT_EXPECTED_FRAME;
+	ack.error_flag = -1;
+	ack.val =  T + header_transmission_delay;
+	return ack;
+}
+
+void send(int SN, double T) 
+{
+	frame_t frame_in_transmission;
+	frame_t packet_received;
+
+	printf("INPUT TO F_CHANNEL:\tTime = %f\tSN = %d\tL = %d\n", T, SN, frame_length);
+	frame_in_transmission = channel(SN, T, frame_length);
+	
+	if (frame_in_transmission.is_null)
+	{
+		packet_received.is_null = 1;
+	}
+
+	printf("INPUT TO RECEIVER:\tTime = %f\tSN = %d\tERROR = %d\tIS_NULL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, frame_in_transmission.error_flag, frame_in_transmission.is_null);
+	frame_in_transmission = receiver(frame_in_transmission.sequence_number, frame_in_transmission.val, frame_in_transmission.error_flag);
+	
+	if (frame_in_transmission.is_null)
+	{
+		packet_received.is_null = 1;
+	}
+
+	printf("INPUT TO R_CHANNEL:\tTime = %f\tRN = %d\tL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, H);
+	frame_in_transmission = channel(frame_in_transmission.sequence_number, frame_in_transmission.val, H);
+
+	if (!frame_in_transmission.is_null)
+	{
+		packet_received = frame_in_transmission;
+		register_event('a', packet_received.val, packet_received.error_flag, packet_received.sequence_number);
+		printf("Registered an ACK Event AT %f\n", packet_received.val);
+	}
+}
+
+void sender()
+{
+	printf("SENDER\n");
+	struct event *next_event;
+	int window_slide_amount = 0;
+
+	printf("COUNTER BEFORE WHILE: %d\n", counter);
+	while (counter < N)
+	{
+		printf("[S]SUCCESS COUNT: %d\n", success_count);
+		if (success_count == DURATION)
+		{
+			printf("BREAK\n");
+			break;
+		}
+
+		printf("COUNTER: %d | N: %d\n", counter, N);
+		T_c = T_c + transmission_delay;
+		T[counter] = T_c;											// Transmission Time
+		NEXT_EXPECTED_ACK[counter] = (SN[counter] + 1) % (N + 1);
+
+		if (counter == 0)
+		{
+			register_event('t', T[counter] + delta_timeout, -1, -1);
+		}
+
+		send(SN[counter], T[counter]);
+		next_event = first;
+
+		if ((next_event->val < T[counter]) && (next_event->type == 't'))
+		{
+			printf("CONDITION 1\n");
+			purge_timeout(timeout_ptr);
+			counter = 0;
+			continue;
+		}
+		
+		else if (next_event->val < T[counter] && next_event->error_flag == 0 && check_RN(next_event->sequence_number) && next_event->type == 'a')
+		{
+			printf("CONDITION 2\n");
+			P = SN[0];
+			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
+			window_slide(window_slide_amount);
+			purge_timeout(timeout_ptr);
+			register_event('t', T[0] + delta_timeout, -1, -1);
+		}
+
+		if ((counter + 1) < N)
+		{
+			counter = counter + 1;
+			SN[counter] = (SN[counter - 1] + 1) % (N + 1);
+		} 
+		else 
+		{
+			break;
+		}
+		// counter = counter + 1;
+		// SN[counter] = (SN[counter - 1] + 1) % (N + 1);
+	}
+	print_buffer_sn();
+	print_buffer_t();
+}
+
+int is_empty()
+{
+	return !first;
+}
+
+void event_processor()
+{
+	printf("------- EVENT PROCESSOR --------\n");
+
+	struct event *next_event;
+	int window_slide_amount = 0;
+	print_list(first);
+
+	while (!is_empty())
+	{
+		if (success_count == DURATION)
+		{
+			printf("BREAK\n");
+			break;
+		}
+
+		next_event = read_es();
+		T_c = next_event->val;
+		printf("T_c: %f\n", T_c);
+
+		if (next_event->type == 't')
+		{
+			printf("CONDITION 4\n");
+			purge_timeout(timeout_ptr);
+			counter = 0;
+			sender();
+		}
+		else if (next_event->type == 'a' && !next_event->error_flag && check_RN(next_event->sequence_number))
+		{
+			printf("CONDITION 5\n");
+
+			P = SN[0];
+			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
+			window_slide(window_slide_amount);
+			purge_timeout(timeout_ptr);
+			register_event('t', T[0] + delta_timeout, -1, -1);
+			
+			if ((counter + 1) < N)
+			{
+				counter = counter + 1;
+				SN[counter] = (SN[counter - 1] + 1) % (N + 1);
+			} 
+			else 
+			{
+				break;
+			}
+
+			sender();
+		}
+	}
+}
+
 int main(int argc, char *argv[]) 
 {
-	srand(time(0));	
-	double throughput = 0.0;
+	srand(time(0));
+	fp = fopen("GBN.csv", "a+");
 
-	params.N = 4;
+	//tau = 0.005;
+	//ber = 0.0001;
+	//delta_timeout = 2.5*tau;
 
-	params.frame_header_len = H;
-	params.packet_len = l;
-	params.link_rate = 5000000;
-	params.duration = 10000;
+	transmission_delay = ((double)H + (double)l)/(double)C;
+	header_transmission_delay = (double)H/(double)C;
 
-	params.tau = 0.005;
-	params.ber = 0.0;
-	params.delta_timeout = 2.5*params.tau;
+	frame_length = H + l;
 
-	frame_length = params.frame_header_len + params.packet_len;
-	transmission_delay = (double)frame_length / (double)params.link_rate;	// L/C
+	double tau_set[2] = {0.005, 0.25};
+	double delta_set[10] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0], 2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
+	double ber_set[3] = {0.0, 0.00001, 0.0001};
 
-	do_gbn();
-	//printf("THRU:\t%f\n", throughput);
+	
+	printf("\n");
+	printf("T_C: %f | Throughput: %f\n", T_c, throughput);
 
+	//a1
+	fp = fopen("GBN.csv", "a+");
+	tau = tau_set[0];
+	delta_timeout = delta_set[0];
+	ber = ber_set[1];
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION * ((double)l))/T_c;
+	fprintf(fp, "%f\n" , throughput);
+	throughput = 0.0;
+	reinit_global_vars();
+	list_cleanup(first);
+	fclose(fp);
+
+
+	//b1
+	// fp = fopen("GBN.csv", "a+");
+	// tau = tau_set[0];
+	// delta_timeout = delta_set[1];
+	// ber = ber_set[0];
+	// initialize();
+	// sender();
+	// event_processor();
+	// throughput = ((double)DURATION * ((double)l))/T_c;
+	// fprintf(fp, "%f\n" , throughput);
+	// throughput = 0.0;
+	// reinit_global_vars();
+	// list_cleanup(first);
+	// fclose(fp);
+
+	// //c1
+	// fp = fopen("GBN.csv", "a+");
+	// tau = tau_set[0];
+	// delta_timeout = delta_set[2];
+	// ber = ber_set[0];
+	// initialize();
+	// sender();
+	// event_processor();
+	// throughput = ((double)DURATION * ((double)l))/T_c;
+	// fprintf(fp, "%f\n" , throughput);
+	// throughput = 0.0;
+	// reinit_global_vars();
+	// list_cleanup(first);
+	// fclose(fp);
+
+	// //d1
+	// fp = fopen("GBN.csv", "a+");
+	// tau = tau_set[0];
+	// delta_timeout = delta_set[3];
+	// ber = ber_set[0];
+	// initialize();
+	// sender();
+	// event_processor();
+	// throughput = ((double)DURATION * ((double)l))/T_c;
+	// fprintf(fp, "%f\n" , throughput);
+	// throughput = 0.0;
+	// reinit_global_vars();
+	// list_cleanup(first);
+	// fclose(fp);
+
+	// //e1
+	// fp = fopen("GBN.csv", "a+");
+	// tau = tau_set[0];
+	// delta_timeout = delta_set[4];
+	// ber = ber_set[0];
+	// initialize();
+	// sender();
+	// event_processor();
+	// throughput = ((double)DURATION * ((double)l))/T_c;
+	// fprintf(fp, "%f\n" , throughput);
+	// throughput = 0.0;
+	// reinit_global_vars();
+	// list_cleanup(first);
+	// fclose(fp);
 
 }
