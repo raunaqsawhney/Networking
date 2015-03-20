@@ -14,8 +14,6 @@
 #define C 5000000
 #define DURATION 10000
 
-FILE *fp;
-
 double tau = 0.0;
 double ber = 0.0;
 double delta_timeout = 0.0;
@@ -41,30 +39,37 @@ int P = 0;
 
 struct event *timeout_ptr = (struct event *)NULL;
 
-void reinit_global_vars()
+FILE *fp;
+
+void reset_tables() 
 {
+	int i;
+	for (i = 0; i < N; i++)
+	{
+		SN[i] = -1;
+		T[i] = -1.0;
+		NEXT_EXPECTED_ACK[i] = -1.0;
+	}
+}
+
+void restart()
+{
+	tau = 0.0;
+	ber = 0.0;
+	delta_timeout = 0.0;
+	throughput = 0.0;
 
 	first = NULL;
 	last = NULL;
 
-	int i;
-	for (i = 0; i < N; i ++)
-	{
-		SN[i] = 0;
-		T[i] = 0;
-		NEXT_EXPECTED_ACK[i] = 0;
-	}
-
+	reset_tables();
+	
 	NEXT_EXPECTED_FRAME = 0;
 
 	T_c = 0.0;
 	counter = 0;
 
-	transmission_delay = 0.0;
-	header_transmission_delay = 0.0;
-	frame_length = 0;
 	success_count = 0;
-
 	P = 0;
 
 	timeout_ptr = NULL;
@@ -82,9 +87,9 @@ int gen_rand(double probability)
 
 void print_event(struct event *ptr)
 {
-	printf("Type:\t%c\n", ptr->type);
-	printf("Time:\t%f\n", ptr->val);
-	printf("\n");
+			printf("Type:\t%c\n", ptr->type);
+			printf("Time:\t%f\n", ptr->val);
+			printf("\n");
 }
 
 void print_list(struct event *ptr)
@@ -225,21 +230,21 @@ void list_delete_event(struct event *ptr)
 
 void print_buffer_sn()
 {
-	printf("PRINT BUFFER SN\n");
+			printf("PRINT BUFFER SN\n");
 	int i;
 	for (i = 0; i < N; i++)
 	{
-		printf("[%d] - %d\n", i, SN[i]);
+				printf("[%d] - %d\n", i, SN[i]);
 	}
 }
 
 void print_buffer_t()
 {
-	printf("PRINT BUFFER T\n");
+			printf("PRINT BUFFER T\n");
 	int i;
 	for (i = 0; i < N; i++)
 	{
-		printf("[%d] - %f\n", i, T[i]);
+				printf("[%d] - %f\n", i, T[i]);
 	}
 }
 
@@ -248,18 +253,18 @@ struct event * read_es()
 	success_t success;
 
 	// Read the ES
-	printf("READ ES:\n");
+			printf("READ ES:\n");
 	print_list(first);
 
 	struct event *next_event = first;
 	struct event *next_event_tmp = next_event;
 
-	printf("NEXT EVENT WAS:\n");
+			printf("NEXT EVENT WAS:\n");
 	print_event(next_event_tmp);
 	
 	list_delete_event(next_event);
 
-	printf("READ ES AFTER DELETE TOP:\n");
+			printf("READ ES AFTER DELETE TOP:\n");
 	print_list(first);
 
 	return next_event_tmp;
@@ -267,7 +272,7 @@ struct event * read_es()
 
 void purge_timeout (struct event *ptr)
 {
-	printf("BEFORE PURGE\n");
+			printf("BEFORE PURGE\n");
 	print_list(first);
 
 	struct event *temp;
@@ -276,7 +281,7 @@ void purge_timeout (struct event *ptr)
    		return; 
 
 	if (ptr == first && ptr->type == 't') { 
-		printf("TO PURGE:\n");
+				printf("TO PURGE:\n");
 		print_event(first); 
 		list_delete_event(first);         
 	}
@@ -291,12 +296,12 @@ void purge_timeout (struct event *ptr)
 
        	if (temp != NULL)
 		{	
-	       	printf("TO PURGE:\n");
+	       			printf("TO PURGE:\n");
 	       	print_event(temp);
 			list_delete_event(temp);   
        	}                  
    	}
-   	printf("AFTER PURGE\n");
+   			printf("AFTER PURGE\n");
 	print_list(first); 
 }
 
@@ -307,7 +312,7 @@ int check_RN(int sequence_number)
 	{
 		if (sequence_number == NEXT_EXPECTED_ACK[i])
 		{
-			printf("CHECK_RN -- RN = %d | NEA[%d] = %d\n", sequence_number, i, NEXT_EXPECTED_ACK[i]);
+					printf("CHECK_RN -- RN = %d | NEA[%d] = %d\n", sequence_number, i, NEXT_EXPECTED_ACK[i]);
 			return 1;
 		}
 	}
@@ -317,57 +322,71 @@ int check_RN(int sequence_number)
 void window_slide(int window_slide_amount)
 {
 	success_count += window_slide_amount;
-	counter -= window_slide_amount;
+    counter = (counter - window_slide_amount + N + 1) % (N + 1);
 	
 	// Shift the counter left by some amount
 	int i;
 
-	printf("BEFORE\n");
-	printf("------SN------\n");
+			printf("BEFORE\n");
+			printf("------SN------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%d\n", SN[i]);
+				printf("%d\n", SN[i]);
 	}
 
-	printf("------T------\n");
+			printf("------T------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%f\n", T[i]);
+				printf("%f\n", T[i]);
 	}
 
-	printf("------NEA------\n");
+			printf("------NEA------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%d\n", NEXT_EXPECTED_ACK[i]);
+				printf("%d\n", NEXT_EXPECTED_ACK[i]);
 	}
 
-	printf("\n");
+			printf("\n");
 
-	i = 0;
-	for (i = window_slide_amount; i < N; i++)
+	if (window_slide_amount == N)
 	{
-		SN[i - window_slide_amount] = SN[i];
-		T[i - window_slide_amount] = T[i];
-		NEXT_EXPECTED_ACK[i - window_slide_amount] = NEXT_EXPECTED_ACK[i];
+		SN[0] = (SN[N - 1] + 1) % (N + 1);
+		NEXT_EXPECTED_ACK[0] = (NEXT_EXPECTED_ACK[N - 1] + 1) % (N + 1);
+		
+		int i;
+		for (i = 0; i < N - 1; i++) {
+		    SN[i + 1] = (SN[i] + 1) % (N + 1);
+		    NEXT_EXPECTED_ACK[i + 1] = (NEXT_EXPECTED_ACK[i] + 1) % (N + 1);
+		}
+	} 
+	else 
+	{
+		i = 0;
+		for (i = window_slide_amount; i < N; i++)
+		{
+			SN[i - window_slide_amount] = SN[i];
+			T[i - window_slide_amount] = T[i];
+			NEXT_EXPECTED_ACK[i - window_slide_amount] = NEXT_EXPECTED_ACK[i];
+		}
 	}
 
-	printf("AFTER\n");
-	printf("------SN------\n");
+			printf("AFTER\n");
+			printf("------SN------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%d\n", SN[i]);
+				printf("%d\n", SN[i]);
 	}
 
-	printf("------T------\n");
+			printf("------T------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%f\n", T[i]);
+				printf("%f\n", T[i]);
 	}
 
-	printf("------NEA------\n");
+			printf("------NEA------\n");
 	for (i = 0; i < N; i++)
 	{
-		printf("%d\n", NEXT_EXPECTED_ACK[i]);
+				printf("%d\n", NEXT_EXPECTED_ACK[i]);
 	}
 }
 
@@ -389,6 +408,11 @@ void initialize()
 	SN[0] = 0;
 	NEXT_EXPECTED_FRAME = 0;
 	// NEXT_EXPECTED_ACK ALREADY INITIALIZED AS EMPTY LIST
+}
+
+int is_empty()
+{
+	return !first;
 }
 
 frame_t channel(int sequence_number, double T, int L)
@@ -440,15 +464,12 @@ frame_t receiver(int sequence_number, double T, int error_flag)
 	frame_t ack;
 	int forward_channel_error = error_flag;
 
-
 	if (forward_channel_error == 0 && sequence_number == NEXT_EXPECTED_FRAME)
 	{
 		NEXT_EXPECTED_FRAME = (NEXT_EXPECTED_FRAME + 1) % (N + 1);
 		// New and successfully delivered packet
 		// Send to layer 3
 	} 
-
-
 
 	ack.size = H;
 	ack.sequence_number = NEXT_EXPECTED_FRAME;
@@ -462,7 +483,7 @@ void send(int SN, double T)
 	frame_t frame_in_transmission;
 	frame_t packet_received;
 
-	printf("INPUT TO F_CHANNEL:\tTime = %f\tSN = %d\tL = %d\n", T, SN, frame_length);
+			printf("INPUT TO F_CHANNEL:\tTime = %f\tSN = %d\tL = %d\n", T, SN, frame_length);
 	frame_in_transmission = channel(SN, T, frame_length);
 	
 	if (frame_in_transmission.is_null)
@@ -470,7 +491,7 @@ void send(int SN, double T)
 		packet_received.is_null = 1;
 	}
 
-	printf("INPUT TO RECEIVER:\tTime = %f\tSN = %d\tERROR = %d\tIS_NULL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, frame_in_transmission.error_flag, frame_in_transmission.is_null);
+			printf("INPUT TO RECEIVER:\tTime = %f\tSN = %d\tERROR = %d\tIS_NULL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, frame_in_transmission.error_flag, frame_in_transmission.is_null);
 	frame_in_transmission = receiver(frame_in_transmission.sequence_number, frame_in_transmission.val, frame_in_transmission.error_flag);
 	
 	if (frame_in_transmission.is_null)
@@ -478,34 +499,33 @@ void send(int SN, double T)
 		packet_received.is_null = 1;
 	}
 
-	printf("INPUT TO R_CHANNEL:\tTime = %f\tRN = %d\tL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, H);
+			printf("INPUT TO R_CHANNEL:\tTime = %f\tRN = %d\tL = %d\n", frame_in_transmission.val, frame_in_transmission.sequence_number, H);
 	frame_in_transmission = channel(frame_in_transmission.sequence_number, frame_in_transmission.val, H);
 
 	if (!frame_in_transmission.is_null)
 	{
 		packet_received = frame_in_transmission;
+				printf("Registered an ACK Event AT %f\n", packet_received.val);
 		register_event('a', packet_received.val, packet_received.error_flag, packet_received.sequence_number);
-		printf("Registered an ACK Event AT %f\n", packet_received.val);
 	}
 }
 
 void sender()
 {
-	printf("SENDER\n");
+			printf("SENDER\n");
 	struct event *next_event;
 	int window_slide_amount = 0;
 
-	printf("COUNTER BEFORE WHILE: %d\n", counter);
+			printf("COUNTER BEFORE WHILE: %d\n", counter);
 	while (counter < N)
 	{
-		printf("[S]SUCCESS COUNT: %d\n", success_count);
-		if (success_count == DURATION)
+				printf("[S]SUCCESS COUNT: %d\n", success_count);
+		if (success_count >= DURATION)
 		{
-			printf("BREAK\n");
 			break;
 		}
 
-		printf("COUNTER: %d | N: %d\n", counter, N);
+				printf("COUNTER: %d | N: %d\n", counter, N);
 		T_c = T_c + transmission_delay;
 		T[counter] = T_c;											// Transmission Time
 		NEXT_EXPECTED_ACK[counter] = (SN[counter] + 1) % (N + 1);
@@ -516,94 +536,95 @@ void sender()
 		}
 
 		send(SN[counter], T[counter]);
+
 		next_event = first;
 
 		if ((next_event->val < T[counter]) && (next_event->type == 't'))
 		{
-			printf("CONDITION 1\n");
-			purge_timeout(timeout_ptr);
+					printf("CONDITION 1\n");
+			list_cleanup(first);
 			counter = 0;
+			NEXT_EXPECTED_FRAME = SN[0];
 			continue;
 		}
-		
-		else if (next_event->val < T[counter] && next_event->error_flag == 0 && check_RN(next_event->sequence_number) && next_event->type == 'a')
+
+		if (next_event->val < T[counter] && next_event->error_flag == 0 && next_event->type == 'a' && check_RN(next_event->sequence_number))
 		{
-			printf("CONDITION 2\n");
+					printf("CONDITION 2\n");
 			P = SN[0];
 			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
 			purge_timeout(timeout_ptr);
 			register_event('t', T[0] + delta_timeout, -1, -1);
 		}
-
-		if ((counter + 1) < N)
+		else if (next_event->val < T[counter] && next_event->error_flag == 0 && next_event->type == 'a' && !check_RN(next_event->sequence_number))
 		{
-			counter = counter + 1;
+			list_delete_event(first);
+		}
+
+		int temp_counter = counter + 1;
+		if (temp_counter < N)
+		{
+			counter = temp_counter;
 			SN[counter] = (SN[counter - 1] + 1) % (N + 1);
-		} 
-		else 
+		}
+		else
 		{
 			break;
+
 		}
-		// counter = counter + 1;
-		// SN[counter] = (SN[counter - 1] + 1) % (N + 1);
 	}
 	print_buffer_sn();
 	print_buffer_t();
 }
 
-int is_empty()
-{
-	return !first;
-}
-
 void event_processor()
 {
-	printf("------- EVENT PROCESSOR --------\n");
+			printf("------- EVENT PROCESSOR --------\n");
 
 	struct event *next_event;
 	int window_slide_amount = 0;
-	print_list(first);
 
 	while (!is_empty())
 	{
+				printf("[E]SUCCESS COUNT: %d\n", success_count);
 		if (success_count == DURATION)
 		{
-			printf("BREAK\n");
+					printf("BREAK\n");
 			break;
 		}
 
 		next_event = read_es();
+		if (next_event->type == 't')
+		{
+			// Event was timeout
+		}
+		else 
+		{
+			if (next_event->error_flag)
+				continue;
+		}
+
 		T_c = next_event->val;
-		printf("T_c: %f\n", T_c);
 
 		if (next_event->type == 't')
 		{
-			printf("CONDITION 4\n");
-			purge_timeout(timeout_ptr);
+					printf("CONDITION 4\n");
 			counter = 0;
+			NEXT_EXPECTED_FRAME = SN[0];
+			list_cleanup(first);
 			sender();
 		}
-		else if (next_event->type == 'a' && !next_event->error_flag && check_RN(next_event->sequence_number))
+		else if (next_event->error_flag == 0 && next_event->type == 'a' && check_RN(next_event->sequence_number))
 		{
-			printf("CONDITION 5\n");
-
+					printf("CONDITION 2\n");
 			P = SN[0];
 			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
 			purge_timeout(timeout_ptr);
 			register_event('t', T[0] + delta_timeout, -1, -1);
-			
-			if ((counter + 1) < N)
-			{
-				counter = counter + 1;
-				SN[counter] = (SN[counter - 1] + 1) % (N + 1);
-			} 
-			else 
-			{
-				break;
-			}
-
+			counter = counter + 1;
+			SN[counter] = (SN[counter - 1] + 1) % (N + 1);
 			sender();
 		}
 	}
@@ -611,100 +632,44 @@ void event_processor()
 
 int main(int argc, char *argv[]) 
 {
-	srand(time(0));
-	fp = fopen("GBN.csv", "a+");
+	srand(time(0));	
 
-	//tau = 0.005;
-	//ber = 0.0001;
-	//delta_timeout = 2.5*tau;
+	double tau_set[2] = {0.005, 0.25};
+	double delta_set[10] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0], 2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
+	double ber_set[3] = {0.0, 0.00001, 0.0001};
 
 	transmission_delay = ((double)H + (double)l)/(double)C;
 	header_transmission_delay = (double)H/(double)C;
 
 	frame_length = H + l;
 
-	double tau_set[2] = {0.005, 0.25};
-	double delta_set[10] = {2.5*tau_set[0], 5*tau_set[0], 7.5*tau_set[0], 10*tau_set[0], 12.5*tau_set[0], 2.5*tau_set[1], 5*tau_set[1], 7.5*tau_set[1], 10*tau_set[1], 12.5*tau_set[1]};
-	double ber_set[3] = {0.0, 0.00001, 0.0001};
+	int i, j, k;
+	for (i = 0; i < 10; i++)
+	{
+		for (j = 0; j < 2; j++)
+		{
+			for (k = 0; k < 3; k++)
+			{
+				fp = fopen("GBN.csv", "a+");
 
-	
-	printf("\n");
-	printf("T_C: %f | Throughput: %f\n", T_c, throughput);
+				delta_timeout = delta_set[i];
+				tau = tau_set[j];
+				ber = ber_set[k];
 
-	//a1
-	fp = fopen("GBN.csv", "a+");
-	tau = tau_set[0];
-	delta_timeout = delta_set[0];
-	ber = ber_set[1];
-	initialize();
-	sender();
-	event_processor();
-	throughput = ((double)DURATION * ((double)l))/T_c;
-	fprintf(fp, "%f\n" , throughput);
-	throughput = 0.0;
-	reinit_global_vars();
-	list_cleanup(first);
-	fclose(fp);
+				printf("PARAMS: %f, %f, %f\n", delta_timeout, tau, ber );
 
+				initialize();
+				sender();
+				event_processor();
 
-	//b1
-	// fp = fopen("GBN.csv", "a+");
-	// tau = tau_set[0];
-	// delta_timeout = delta_set[1];
-	// ber = ber_set[0];
-	// initialize();
-	// sender();
-	// event_processor();
-	// throughput = ((double)DURATION * ((double)l))/T_c;
-	// fprintf(fp, "%f\n" , throughput);
-	// throughput = 0.0;
-	// reinit_global_vars();
-	// list_cleanup(first);
-	// fclose(fp);
-
-	// //c1
-	// fp = fopen("GBN.csv", "a+");
-	// tau = tau_set[0];
-	// delta_timeout = delta_set[2];
-	// ber = ber_set[0];
-	// initialize();
-	// sender();
-	// event_processor();
-	// throughput = ((double)DURATION * ((double)l))/T_c;
-	// fprintf(fp, "%f\n" , throughput);
-	// throughput = 0.0;
-	// reinit_global_vars();
-	// list_cleanup(first);
-	// fclose(fp);
-
-	// //d1
-	// fp = fopen("GBN.csv", "a+");
-	// tau = tau_set[0];
-	// delta_timeout = delta_set[3];
-	// ber = ber_set[0];
-	// initialize();
-	// sender();
-	// event_processor();
-	// throughput = ((double)DURATION * ((double)l))/T_c;
-	// fprintf(fp, "%f\n" , throughput);
-	// throughput = 0.0;
-	// reinit_global_vars();
-	// list_cleanup(first);
-	// fclose(fp);
-
-	// //e1
-	// fp = fopen("GBN.csv", "a+");
-	// tau = tau_set[0];
-	// delta_timeout = delta_set[4];
-	// ber = ber_set[0];
-	// initialize();
-	// sender();
-	// event_processor();
-	// throughput = ((double)DURATION * ((double)l))/T_c;
-	// fprintf(fp, "%f\n" , throughput);
-	// throughput = 0.0;
-	// reinit_global_vars();
-	// list_cleanup(first);
-	// fclose(fp);
-
+				throughput = ((double)DURATION * ((double)l))/T_c;
+				printf("%f,", throughput);
+				fprintf(fp, "%f,", throughput);
+				list_cleanup(first);
+				restart();
+				fclose(fp);
+			}
+		}
+		fprintf(fp, "\n");
+	}
 }
