@@ -38,6 +38,8 @@ double CURRENT_TIME = 0.0;
 int frame_length;
 double transmission_delay;	// L/C
 
+double throughput = 0.0;
+
 void reinit_global_vars()
 {
 	frame_t sender_buffer[1] = {};
@@ -49,6 +51,8 @@ void reinit_global_vars()
 	NEXT_EXPECTED_ACK = 1;
 	NEXT_EXPECTED_FRAME = 0;
 	CURRENT_TIME = 0.0;
+
+	throughput = 0.0;
 }
 
 void print_event(struct event *ptr)
@@ -226,6 +230,7 @@ int gen_rand(double probability)
 
 double do_abp() 
 {
+
 	double throughput = 0.0;
 	
 	int success_count = 0;
@@ -268,10 +273,6 @@ double do_abp()
 		}
 		
 		throughput = ((double)success_count * ((double)params.packet_len))/CURRENT_TIME;
-		
-		printf("SUCCESS COUNT: %d\tPACKET_LEN: %d\tCURRENT_TIME: %f\n", success_count, params.packet_len, CURRENT_TIME);
-		printf("THROUGHPUT:\t%f\n", throughput);
-
 	}
 	return throughput;
 }
@@ -816,7 +817,6 @@ int main(int argc, char *argv[])
 	reinit_global_vars();
 
 	list_cleanup(first);
-
 
 	//e4
 	params.tau = tau_set[1];

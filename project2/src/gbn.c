@@ -12,7 +12,7 @@
 #define BER_THRESHOLD 5
 #define N 4
 #define C 5000000
-#define DURATION 10000
+#define DURATION 5000
 
 double tau = 0.0;
 double ber = 0.0;
@@ -48,7 +48,7 @@ void reset_tables()
 	{
 		SN[i] = -1;
 		T[i] = -1.0;
-		NEXT_EXPECTED_ACK[i] = -1.0;
+		NEXT_EXPECTED_ACK[i] = -1;
 	}
 }
 
@@ -253,18 +253,18 @@ struct event * read_es()
 	success_t success;
 
 	// Read the ES
-			printf("READ ES:\n");
+	printf("READ ES:\n");
 	print_list(first);
 
 	struct event *next_event = first;
 	struct event *next_event_tmp = next_event;
 
-			printf("NEXT EVENT WAS:\n");
+	printf("NEXT EVENT WAS:\n");
 	print_event(next_event_tmp);
 	
 	list_delete_event(next_event);
 
-			printf("READ ES AFTER DELETE TOP:\n");
+	printf("READ ES AFTER DELETE TOP:\n");
 	print_list(first);
 
 	return next_event_tmp;
@@ -272,7 +272,7 @@ struct event * read_es()
 
 void purge_timeout (struct event *ptr)
 {
-			printf("BEFORE PURGE\n");
+	printf("BEFORE PURGE\n");
 	print_list(first);
 
 	struct event *temp;
@@ -281,7 +281,7 @@ void purge_timeout (struct event *ptr)
    		return; 
 
 	if (ptr == first && ptr->type == 't') { 
-				printf("TO PURGE:\n");
+		printf("TO PURGE:\n");
 		print_event(first); 
 		list_delete_event(first);         
 	}
@@ -296,12 +296,12 @@ void purge_timeout (struct event *ptr)
 
        	if (temp != NULL)
 		{	
-	       			printf("TO PURGE:\n");
+	       	printf("TO PURGE:\n");
 	       	print_event(temp);
 			list_delete_event(temp);   
        	}                  
    	}
-   			printf("AFTER PURGE\n");
+   	printf("AFTER PURGE\n");
 	print_list(first); 
 }
 
@@ -312,7 +312,7 @@ int check_RN(int sequence_number)
 	{
 		if (sequence_number == NEXT_EXPECTED_ACK[i])
 		{
-					printf("CHECK_RN -- RN = %d | NEA[%d] = %d\n", sequence_number, i, NEXT_EXPECTED_ACK[i]);
+			printf("CHECK_RN -- RN = %d | NEA[%d] = %d\n", sequence_number, i, NEXT_EXPECTED_ACK[i]);
 			return 1;
 		}
 	}
@@ -323,71 +323,30 @@ void window_slide(int window_slide_amount)
 {
 	success_count += window_slide_amount;
     counter = (counter - window_slide_amount + N + 1) % (N + 1);
-	
-	// Shift the counter left by some amount
-	int i;
 
-			printf("BEFORE\n");
-			printf("------SN------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%d\n", SN[i]);
-	}
+    int i;
 
-			printf("------T------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%f\n", T[i]);
-	}
-
-			printf("------NEA------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%d\n", NEXT_EXPECTED_ACK[i]);
-	}
-
-			printf("\n");
-
-	if (window_slide_amount == N)
-	{
-		SN[0] = (SN[N - 1] + 1) % (N + 1);
-		NEXT_EXPECTED_ACK[0] = (NEXT_EXPECTED_ACK[N - 1] + 1) % (N + 1);
-		
-		int i;
-		for (i = 0; i < N - 1; i++) {
-		    SN[i + 1] = (SN[i] + 1) % (N + 1);
-		    NEXT_EXPECTED_ACK[i + 1] = (NEXT_EXPECTED_ACK[i] + 1) % (N + 1);
-		}
-	} 
-	else 
-	{
-		i = 0;
-		for (i = window_slide_amount; i < N; i++)
-		{
-			SN[i - window_slide_amount] = SN[i];
-			T[i - window_slide_amount] = T[i];
-			NEXT_EXPECTED_ACK[i - window_slide_amount] = NEXT_EXPECTED_ACK[i];
-		}
-	}
-
-			printf("AFTER\n");
-			printf("------SN------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%d\n", SN[i]);
-	}
-
-			printf("------T------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%f\n", T[i]);
-	}
-
-			printf("------NEA------\n");
-	for (i = 0; i < N; i++)
-	{
-				printf("%d\n", NEXT_EXPECTED_ACK[i]);
-	}
+    if (window_slide_amount == N)
+    {
+    	SN[0] = (SN[N - 1] + 1) % (N + 1);
+    	NEXT_EXPECTED_ACK[0] = (NEXT_EXPECTED_ACK[N - 1] + 1) % (N + 1);
+    	
+    	int i;
+    	for (i = 0; i < N - 1; i++) {
+    	    SN[i + 1] = (SN[i] + 1) % (N + 1);
+    	    NEXT_EXPECTED_ACK[i + 1] = (NEXT_EXPECTED_ACK[i] + 1) % (N + 1);
+    	}
+    } 
+    else 
+    {
+    	i = 0;
+    	for (i = window_slide_amount; i < N; i++)
+    	{
+    		SN[i - window_slide_amount] = SN[i];
+    		T[i - window_slide_amount] = T[i];
+    		NEXT_EXPECTED_ACK[i - window_slide_amount] = NEXT_EXPECTED_ACK[i];
+    	}
+    }
 }
 
 void register_event(char type, double val, int error_flag, int sequence_number)
@@ -512,20 +471,17 @@ void send(int SN, double T)
 
 void sender()
 {
-			printf("SENDER\n");
 	struct event *next_event;
 	int window_slide_amount = 0;
 
-			printf("COUNTER BEFORE WHILE: %d\n", counter);
 	while (counter < N)
 	{
-				printf("[S]SUCCESS COUNT: %d\n", success_count);
+		printf("[S]SUCCESS COUNT: %d\n", success_count);
 		if (success_count >= DURATION)
 		{
 			break;
 		}
 
-				printf("COUNTER: %d | N: %d\n", counter, N);
 		T_c = T_c + transmission_delay;
 		T[counter] = T_c;											// Transmission Time
 		NEXT_EXPECTED_ACK[counter] = (SN[counter] + 1) % (N + 1);
@@ -541,7 +497,6 @@ void sender()
 
 		if ((next_event->val < T[counter]) && (next_event->type == 't'))
 		{
-					printf("CONDITION 1\n");
 			list_cleanup(first);
 			counter = 0;
 			NEXT_EXPECTED_FRAME = SN[0];
@@ -550,7 +505,6 @@ void sender()
 
 		if (next_event->val < T[counter] && next_event->error_flag == 0 && next_event->type == 'a' && check_RN(next_event->sequence_number))
 		{
-					printf("CONDITION 2\n");
 			P = SN[0];
 			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
@@ -580,17 +534,14 @@ void sender()
 
 void event_processor()
 {
-			printf("------- EVENT PROCESSOR --------\n");
-
 	struct event *next_event;
 	int window_slide_amount = 0;
 
 	while (!is_empty())
 	{
-				printf("[E]SUCCESS COUNT: %d\n", success_count);
+		printf("[E]SUCCESS COUNT: %d\n", success_count);
 		if (success_count == DURATION)
 		{
-					printf("BREAK\n");
 			break;
 		}
 
@@ -609,7 +560,6 @@ void event_processor()
 
 		if (next_event->type == 't')
 		{
-					printf("CONDITION 4\n");
 			counter = 0;
 			NEXT_EXPECTED_FRAME = SN[0];
 			list_cleanup(first);
@@ -617,7 +567,6 @@ void event_processor()
 		}
 		else if (next_event->error_flag == 0 && next_event->type == 'a' && check_RN(next_event->sequence_number))
 		{
-					printf("CONDITION 2\n");
 			P = SN[0];
 			window_slide_amount = (next_event->sequence_number - P + N + 1) % (N + 1);
 			window_slide(window_slide_amount);
@@ -643,33 +592,407 @@ int main(int argc, char *argv[])
 
 	frame_length = H + l;
 
-	int i, j, k;
-	for (i = 0; i < 10; i++)
-	{
-		for (j = 0; j < 2; j++)
-		{
-			for (k = 0; k < 3; k++)
-			{
-				fp = fopen("GBN.csv", "a+");
+	fp = fopen("GBN.csv", "a+");
 
-				delta_timeout = delta_set[i];
-				tau = tau_set[j];
-				ber = ber_set[k];
 
-				printf("PARAMS: %f, %f, %f\n", delta_timeout, tau, ber );
+	//a1
+	tau = 0.005;
+	delta_timeout = 2.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
 
-				initialize();
-				sender();
-				event_processor();
+	//a2
+	tau = 0.005;
+	delta_timeout = 2.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
 
-				throughput = ((double)DURATION * ((double)l))/T_c;
-				printf("%f,", throughput);
-				fprintf(fp, "%f,", throughput);
-				list_cleanup(first);
-				restart();
-				fclose(fp);
-			}
-		}
-		fprintf(fp, "\n");
-	}
+	//a3
+	tau = 0.005;
+	delta_timeout = 2.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	// //a4
+	tau = 0.25;
+	delta_timeout = 2.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a5
+	tau = 0.25;
+	delta_timeout = 2.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a6
+	tau = 0.25;
+	delta_timeout = 2.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	fprintf(fp, "\n");
+
+	//a1
+	tau = 0.005;
+	delta_timeout = 5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a2
+	tau = 0.005;
+	delta_timeout = 5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a3
+	tau = 0.005;
+	delta_timeout = 5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	// //a4
+	tau = 0.25;
+	delta_timeout = 5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a5
+	tau = 0.25;
+	delta_timeout = 5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a6
+	tau = 0.25;
+	delta_timeout = 5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	fprintf(fp, "\n");
+
+
+	//a1
+	tau = 0.005;
+	delta_timeout = 7.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a2
+	tau = 0.005;
+	delta_timeout = 7.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a3
+	tau = 0.005;
+	delta_timeout = 7.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	// //a4
+	tau = 0.25;
+	delta_timeout = 7.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a5
+	tau = 0.25;
+	delta_timeout = 7.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a6
+	tau = 0.25;
+	delta_timeout = 7.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	fprintf(fp, "\n");
+
+	//a1
+	tau = 0.005;
+	delta_timeout = 10*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a2
+	tau = 0.005;
+	delta_timeout = 10*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a3
+	tau = 0.005;
+	delta_timeout = 10*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	// //a4
+	tau = 0.25;
+	delta_timeout = 10*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a5
+	tau = 0.25;
+	delta_timeout = 10*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a6
+	tau = 0.25;
+	delta_timeout = 10*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	fprintf(fp, "\n");
+
+	//a1
+	tau = 0.005;
+	delta_timeout = 12.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a2
+	tau = 0.005;
+	delta_timeout = 12.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a3
+	tau = 0.005;
+	delta_timeout = 12.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	// //a4
+	tau = 0.25;
+	delta_timeout = 12.5*tau;
+	ber = 0.0;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a5
+	tau = 0.25;
+	delta_timeout = 12.5*tau;
+	ber = 0.00001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	//a6
+	tau = 0.25;
+	delta_timeout = 12.5*tau;
+	ber = 0.0001;
+	initialize();
+	sender();
+	event_processor();
+	throughput = ((double)DURATION*((double)l))/T_c;
+	printf("%f,", throughput);
+	fprintf(fp, "%f,", throughput);
+	list_cleanup(first);
+	restart();
+
+	fclose(fp);
 }
